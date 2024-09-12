@@ -72,18 +72,6 @@
         </style>
     </head>
     <body>
-        <div
-            id="scannerContainer"
-            style="
-                position: relative;
-                width: 320px;
-                height: 240px;
-                display: none;
-            "
-        >
-            <video id="video" autoplay playsinline></video>
-            <button id="closeCamera" class="inline-button">关闭摄像头</button>
-        </div>
         <h1>机房设备信息登记V1</h1>
         <form id="dataForm">
             <label for="building">楼栋:</label>
@@ -136,6 +124,21 @@
                 oninput="this.value = this.value.replace(/[^0-9-]/g, '').trim();"
             />
 
+            <!-- 移除原有的视频流相关代码 -->
+            <!-- <div
+    id="scannerContainer"
+    style="
+        position: relative;
+        width: 320px;
+        height: 240px;
+        display: none;
+    "
+>
+    <video id="video" autoplay playsinline></video>
+    <button id="closeCamera" class="inline-button">关闭摄像头</button>
+</div> -->
+
+            <!-- 增加拍照按钮 -->
             <label for="assetNumber">资产编号:</label>
             <input
                 type="text"
@@ -144,8 +147,8 @@
                 placeholder="扫描条形码"
                 oninput="this.value = this.value.replace(/[^a-zA-Z0-9]/g, '').trim();"
             />
-            <button type="button" id="scanBarcode" class="inline-button">
-                扫描
+            <button type="button" id="takePhoto" class="inline-button">
+                拍照
             </button>
 
             <label for="assetImage">资产标签照片:</label>
@@ -165,7 +168,7 @@
         <div class="status-message" id="statusMessage"></div>
 
         <script src="https://unpkg.com/xlsx@0.16.9/dist/xlsx.full.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/jsqr@1.3.0/dist/jsQR.min.js"></script>
         <script>
             // IndexedDB 数据库设置
             const dbName = "dataStore";
@@ -194,135 +197,97 @@
                 }
             };
 
-            /// 条形码扫描函数
-            function startBarcodeScanner() {
-                // 显示摄像头容器
-                document.getElementById("scannerContainer").style.display =
-                    "block";
-
+            // 新增拍照并识别条形码的函数
+            function takePhotoAndRecognizeBarcode() {
                 // 请求摄像头权限
                 navigator.mediaDevices
-                    .getUserMedia({
-                        video: { facingMode: "environment", zoom: 1.0 },
-                    })
+                    .getUserMedia({ video: true })
                     .then((stream) => {
-                        const video = document.getElementById("video");
-                        video.addEventListener("click", () => {
-                            video.focus();
-                            video.dispatchEvent(new Event("focus"));
-                        });
+                        const video = document.createElement("video");
                         video.srcObject = stream;
                         video.play();
-                        // 设置视频尺寸
-                        video.width = 320;
-                        video.height = 240;
-                        // 成功获取摄像头流
-                        Quagga.init(
-                            {
-                                inputStream: {
-                                    name: "Live",
-                                    type: "LiveStream",
-                                    target: document.querySelector(
-                                        "#scannerContainer"
-                                    ), // 指定扫描区域
-                                    constraints: {
-                                        width: 320,
-                                        height: 240,
-                                        facingMode: "environment",
-                                        video: stream,
-                                    },
-                                },
-                                decoder: {
-                                    readers: ["ean_reader"],
-                                },
-                            },
-                            function (err) {
-                                if (err) {
-                                    console.log(err);
-                                    return;
-                                }
-                                console.log(
-                                    "Initialization finished. Ready to start"
-                                );
-                                Quagga.start();
 
-                                Quagga.onDetected(function (result) {
-                                    const code = result.codeResult.code;
-                                    document.getElementById(
-                                        "assetNumber"
-                                    ).value = code;
-                                    stopBarcodeScanner();
-                                });
-                            }
-                        );
+                        // 等待视频加载完成后拍照
+                        video.onloadedmetadata = () => {
+                            const canvas = document.createElement("canvas");
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+
+                            // 拍照
+                            canvas
+                                .getContext("2d")
+                                .drawImage(
+                                    video,
+                                    0,
+                                    0,
+                                    canvas.width,
+                                    canvas.height
+                                );
+
+                            // 关闭摄像头流
+                            video.srcObject
+                                .getTracks()
+                                .forEach((track) => track.stop());
+
+                            // 显示拍照结果
+                            const photoUrl = canvas.toDataURL();
+                            const photoElement = document.createElement("img");
+                            photoElement.src = photoUrl;
+                            document.body.appendChild(photoElement);
+
+                            // 识别条形码
+                            recognizeBarcodeFromImage(photoUrl);
+                        };
                     })
                     .catch((error) => {
                         console.error("Error accessing camera:", error);
-
-                        // 打印详细的错误信息到弹窗
-                        let errorMessage = "无法访问摄像头，请检查权限设置。";
-
-                        // 根据不同的错误类型给出不同的提示
-                        switch (error.name) {
-                            case "NotAllowedError":
-                                errorMessage =
-                                    "您拒绝了摄像头权限，请在浏览器设置中允许摄像头访问。";
-                                break;
-                            case "NotFoundError":
-                                errorMessage = "摄像头未找到，请检查设备连接。";
-                                break;
-                            case "NotReadableError":
-                                errorMessage = "摄像头当前不可用，请稍后再试。";
-                                break;
-                            case "OverconstrainedError":
-                                errorMessage =
-                                    "摄像头参数设置错误，请检查设备配置。";
-                                break;
-                            case "StreamApiNotSupportedError":
-                                errorMessage =
-                                    "您的浏览器不支持摄像头API，请尝试更新浏览器。";
-                                break;
-                            default:
-                                errorMessage =
-                                    "无法访问摄像头，请检查权限设置。";
-                                break;
-                        }
-
-                        // 将详细的错误信息添加到提示信息中
-                        errorMessage += `\n详细错误信息: ${error.message}`;
-
-                        alert(errorMessage);
+                        alert("无法访问摄像头，请检查权限设置。");
                     });
             }
 
-            // 添加关闭按钮的事件监听器
-            document
-                .getElementById("closeCamera")
-                .addEventListener("click", function () {
-                    stopBarcodeScanner();
-                });
+            // 识别条形码的函数
+            function recognizeBarcodeFromImage(imageUrl) {
+                // 将图像数据转换为 Image 对象
+                const image = new Image();
+                image.src = imageUrl;
 
-            // 停止条形码扫描
-            function stopBarcodeScanner() {
-                // 隐藏摄像头容器
-                document.getElementById("scannerContainer").style.display =
-                    "none";
-                Quagga.stop();
+                image.onload = function () {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = image.width;
+                    canvas.height = image.height;
+
+                    const context = canvas.getContext("2d");
+                    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+                    // 从 canvas 中获取图像数据
+                    const imageData = context.getImageData(
+                        0,
+                        0,
+                        canvas.width,
+                        canvas.height
+                    );
+
+                    // 使用 jsQR 识别条形码
+                    const result = jsQR(
+                        imageData.data,
+                        imageData.width,
+                        imageData.height
+                    );
+
+                    if (result) {
+                        const barcode = result.data;
+                        document.getElementById("assetNumber").value = barcode;
+                    } else {
+                        alert("未识别到条形码，请重新拍照。");
+                    }
+                };
             }
 
-            // 停止条形码扫描
-            function stopBarcodeScanner() {
-                // 隐藏摄像头容器
-                document.getElementById("scannerContainer").style.display =
-                    "none";
-                Quagga.stop();
-            }
-
-            // 条形码扫描按钮事件
+            // 绑定拍照按钮的点击事件
             document
-                .getElementById("scanBarcode")
+                .getElementById("takePhoto")
                 .addEventListener("click", function () {
-                    startBarcodeScanner();
+                    takePhotoAndRecognizeBarcode();
                 });
 
             // 录入数据按钮事件
