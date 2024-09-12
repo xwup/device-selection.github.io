@@ -83,7 +83,7 @@
         >
             <video id="video" autoplay playsinline></video>
         </div>
-        <h1>机房设备信息登记V1</h1>
+        <h1>机房设备信息登记V2</h1>
         <form id="dataForm">
             <label for="building">楼栋:</label>
             <input
@@ -199,47 +199,52 @@
                 document.getElementById("scannerContainer").style.display =
                     "block";
 
-                // 初始化 QuaggaJS
-                Quagga.init(
-                    {
-                        inputStream: {
-                            name: "Live",
-                            type: "LiveStream",
-                            target: document.querySelector("#scannerContainer"), // 需要指定一个元素作为扫描区域
-                            constraints: {
-                                width: 320,
-                                height: 240,
-                                facingMode: "environment", // 后置摄像头
-                            },
-                        },
-                        decoder: {
-                            readers: ["ean_reader"], // 支持 EAN 条形码读取
-                        },
-                    },
-                    function (err) {
-                        if (err) {
-                            console.log(err);
-                            return;
-                        }
-                        console.log("Initialization finished. Ready to start");
-                        Quagga.start();
-                    }
-                );
-
-                // 条形码检测回调
-                Quagga.onDetected(function (result) {
-                    const code = result.codeResult.code;
-                    document.getElementById("assetNumber").value = code;
-                    stopBarcodeScanner();
-                });
-
-                // 请求摄像头访问权限
+                // 请求摄像头权限
                 navigator.mediaDevices
                     .getUserMedia({ video: { facingMode: "environment" } })
                     .then((stream) => {
                         const video = document.getElementById("video");
                         video.srcObject = stream;
                         video.play();
+                        // 成功获取摄像头流
+                        Quagga.init(
+                            {
+                                inputStream: {
+                                    name: "Live",
+                                    type: "LiveStream",
+                                    target: document.querySelector(
+                                        "#scannerContainer"
+                                    ), // 指定扫描区域
+                                    constraints: {
+                                        width: 320,
+                                        height: 240,
+                                        facingMode: "environment",
+                                        video: stream,
+                                    },
+                                },
+                                decoder: {
+                                    readers: ["ean_reader"],
+                                },
+                            },
+                            function (err) {
+                                if (err) {
+                                    console.log(err);
+                                    return;
+                                }
+                                console.log(
+                                    "Initialization finished. Ready to start"
+                                );
+                                Quagga.start();
+
+                                Quagga.onDetected(function (result) {
+                                    const code = result.codeResult.code;
+                                    document.getElementById(
+                                        "assetNumber"
+                                    ).value = code;
+                                    stopBarcodeScanner();
+                                });
+                            }
+                        );
                     })
                     .catch((error) => {
                         console.error("Error accessing camera:", error);
@@ -278,6 +283,14 @@
 
                         alert(errorMessage);
                     });
+            }
+
+            // 停止条形码扫描
+            function stopBarcodeScanner() {
+                // 隐藏摄像头容器
+                document.getElementById("scannerContainer").style.display =
+                    "none";
+                Quagga.stop();
             }
 
             // 停止条形码扫描
