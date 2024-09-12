@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>数据中心设备信息登记</title>
+        <style>
+            /* 基本样式 */
+            body {
+                font-family: Arial, sans-serif;
+            }
+            form {
+                max-width: 600px;
+                margin: 50px auto;
+                padding: 20px;
+                background-color: #f4f4f4;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            label {
+                display: block;
+                margin-top: 10px;
+            }
+            input[type="text"],
+            input[type="file"],
+            button {
+                padding: 10px;
+                margin-bottom: 10px;
+                box-sizing: border-box;
+                width: 100%;
+            }
+            .inline-button {
+                width: 100%; /* 占据整行宽度 */
+                height: 3.6em; /* 10:6 的比例 */
+                background-color: #007bff;
+                color: white;
+                border: none;
+                cursor: pointer;
+                border-radius: 4px;
+                font-size: 14px; /* 调整字体大小以适应按钮 */
+            }
+            .inline-button:hover {
+                background-color: #0056b3;
+            }
+            .form-buttons {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 20px;
+            }
+            .form-buttons button {
+                width: 40%;
+            }
+            .status-message {
+                margin-top: 20px;
+                padding: 10px;
+                background-color: #e0e0e0;
+                border-radius: 8px;
+                text-align: center;
+            }
+
+            /* 响应式设计 */
+            @media screen and (max-width: 600px) {
+                form {
+                    width: 90%;
+                }
+                label,
+                input,
+                button {
+                    width: 100%;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div
+            id="scannerContainer"
+            style="
+                position: relative;
+                width: 320px;
+                height: 240px;
+                display: none;
+            "
+        ></div>
+        <h1>数据中心设备信息登记</h1>
+        <form id="dataForm">
+            <label for="building">楼栋:</label>
+            <input
+                type="text"
+                id="building"
+                name="building"
+                required
+                value=""
+                oninput="this.value = this.value.toUpperCase().replace(/[^A-Z]/g, '').trim();"
+            />
+
+            <label for="room">房间:</label>
+            <input
+                type="text"
+                id="room"
+                name="room"
+                required
+                value=""
+                oninput="this.value = this.value.replace(/[^0-9]/g, '').trim();"
+            />
+
+            <label for="cabinetRow">机柜行:</label>
+            <input
+                type="text"
+                id="cabinetRow"
+                name="cabinetRow"
+                required
+                value=""
+                oninput="this.value = this.value.toUpperCase().replace(/[^A-Z]/g, '').trim();"
+            />
+
+            <label for="cabinetColumn">机柜列:</label>
+            <input
+                type="text"
+                id="cabinetColumn"
+                name="cabinetColumn"
+                required
+                value=""
+                oninput="this.value = this.value.replace(/[^0-9]/g, '').trim();"
+            />
+
+            <label for="deviceLayer">设备所在层(U):</label>
+            <input
+                type="text"
+                id="deviceLayer"
+                name="deviceLayer"
+                required
+                value=""
+                oninput="this.value = this.value.replace(/[^0-9-]/g, '').trim();"
+            />
+
+            <label for="assetNumber">资产编号:</label>
+            <input
+                type="text"
+                id="assetNumber"
+                name="assetNumber"
+                placeholder="扫描条形码"
+                oninput="this.value = this.value.replace(/[^a-zA-Z0-9]/g, '').trim();"
+            />
+            <button type="button" id="scanBarcode" class="inline-button">
+                扫描
+            </button>
+
+            <label for="assetImage">资产标签照片:</label>
+            <input
+                type="file"
+                id="assetImage"
+                name="assetImage"
+                accept="image/*"
+            />
+
+            <div class="form-buttons">
+                <button type="button" id="submitData">录入</button>
+                <button type="button" id="exportExcel">导出Excel</button>
+            </div>
+        </form>
+
+        <div class="status-message" id="statusMessage"></div>
+
+        <script src="https://unpkg.com/xlsx@0.16.9/dist/xlsx.full.min.js"></script>
+        <script src="https://unpkg.com/quagga2/dist/quagga2.min.js"></script>
+        <script>
+            // IndexedDB 数据库设置
+            const dbName = "dataStore";
+            const storeName = "deviceInfo";
+            const dbVersion = 1;
+
+            let db;
+
+            // 打开数据库
+            const request = indexedDB.open(dbName, dbVersion);
+
+            request.onerror = function (event) {
+                console.error("Database error:", event.target.errorCode);
+            };
+
+            request.onsuccess = function (event) {
+                db = event.target.result;
+                console.log("Database opened successfully.");
+            };
+
+            request.onupgradeneeded = function (event) {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(storeName)) {
+                    db.createObjectStore(storeName, { keyPath: "assetNumber" });
+                    console.log("Object store created.");
+                }
+            };
+
+            /// 条形码扫描函数
+            function startBarcodeScanner() {
+                // 显示摄像头容器
+                document.getElementById("scannerContainer").style.display =
+                    "block";
+
+                // 请求摄像头权限
+                navigator.mediaDevices
+                    .getUserMedia({ video: { facingMode: "environment" } })
+                    .then((stream) => {
+                        // 成功获取摄像头流
+                        Quagga.init(
+                            {
+                                inputStream: {
+                                    name: "Live",
+                                    type: "LiveStream",
+                                    target: document.querySelector(
+                                        "#scannerContainer"
+                                    ), // 指定扫描区域
+                                    constraints: {
+                                        width: 320,
+                                        height: 240,
+                                        facingMode: "environment",
+                                        video: stream,
+                                    },
+                                },
+                                decoder: {
+                                    readers: ["ean_reader"],
+                                },
+                            },
+                            function (err) {
+                                if (err) {
+                                    console.log(err);
+                                    return;
+                                }
+                                console.log(
+                                    "Initialization finished. Ready to start"
+                                );
+                                Quagga.start();
+                            }
+                        );
+
+                        Quagga.onDetected(function (result) {
+                            const code = result.codeResult.code;
+                            document.getElementById("assetNumber").value = code;
+                            stopBarcodeScanner();
+                        });
+                    })
+                    .catch((error) => {
+                        console.error("Error accessing camera:", error);
+                        alert("无法访问摄像头，请检查权限设置。");
+                    });
+            }
+
+            // 停止条形码扫描
+            function stopBarcodeScanner() {
+                // 隐藏摄像头容器
+                document.getElementById("scannerContainer").style.display =
+                    "none";
+                Quagga.stop();
+            }
+
+            // 条形码扫描按钮事件
+            document
+                .getElementById("scanBarcode")
+                .addEventListener("click", function () {
+                    startBarcodeScanner();
+                });
+
+            // 录入数据按钮事件
+            document
+                .getElementById("submitData")
+                .addEventListener("click", function () {
+                    // 获取表单数据
+                    const building = document.getElementById("building").value;
+                    const room = document.getElementById("room").value;
+                    const cabinetRow =
+                        document.getElementById("cabinetRow").value;
+                    const cabinetColumn =
+                        document.getElementById("cabinetColumn").value;
+                    const deviceLayer =
+                        document.getElementById("deviceLayer").value;
+                    let assetNumber =
+                        document.getElementById("assetNumber").value;
+
+                    // 验证房间号
+                    if (!/^\d+$/.test(room)) {
+                        alert("房间号只能为数字！");
+                        return;
+                    }
+
+                    // 验证机柜行
+                    if (!/^[A-Z]$/.test(cabinetRow)) {
+                        alert("机柜行只能为A-Z的单个字母！");
+                        return;
+                    }
+
+                    // 验证机柜列
+                    if (!/^\d+$/.test(cabinetColumn)) {
+                        alert("机柜列只能为数字！");
+                        return;
+                    }
+
+                    // 验证设备所在层级
+                    if (!/^\d+(\-\d+)?$/.test(deviceLayer)) {
+                        alert("设备所在层级只能为数字或者数字-数字的格式！");
+                        return;
+                    }
+
+                    // 验证资产编码
+                    if (!/^[a-zA-Z0-9]*$/.test(assetNumber)) {
+                        alert("资产编码只能为数字和字母的组合！");
+                        return;
+                    }
+                    let trueAssetNumber = "";
+                    // 如果资产编号为空，则生成默认值
+                    if (assetNumber === "") {
+                        trueAssetNumber = `${building}${room}-${cabinetRow}${cabinetColumn}-${deviceLayer}U无资产信息`;
+                    } else {
+                        trueAssetNumber = assetNumber;
+                    }
+
+                    // 检查是否已经提交过相同资产编号的数据
+                    const transaction = db.transaction(
+                        [storeName],
+                        "readwrite"
+                    );
+                    const store = transaction.objectStore(storeName);
+                    const request = store.get(trueAssetNumber);
+
+                    request.onerror = function (event) {
+                        console.error(
+                            "Error getting data:",
+                            event.target.errorCode
+                        );
+                    };
+
+                    request.onsuccess = function (event) {
+                        if (request.result) {
+                            alert("此资产已提交，请勿重复提交！");
+                            return;
+                        }
+
+                        // 将新数据添加到已提交数据数组中
+                        const newData = {
+                            building: building,
+                            room: room,
+                            cabinetRow: cabinetRow,
+                            cabinetColumn: cabinetColumn,
+                            deviceLayer: deviceLayer,
+                            assetNumber: trueAssetNumber,
+                        };
+
+                        store.add(newData);
+
+                        // 显示录入时间和当前录入信息条数
+                        const now = new Date().toLocaleString();
+                        const count = getRecordCount();
+                        document.getElementById(
+                            "statusMessage"
+                        ).innerHTML = `录入时间: ${now}, 当前录入信息条数: ${count}`;
+
+                        // 保留上次提交的内容
+                        document.getElementById("building").value = building;
+                        document.getElementById("room").value = room;
+                        document.getElementById("cabinetRow").value =
+                            cabinetRow;
+                        document.getElementById("cabinetColumn").value =
+                            cabinetColumn;
+                        document.getElementById("deviceLayer").value =
+                            deviceLayer;
+                        document.getElementById("assetNumber").value =
+                            assetNumber;
+                    };
+                });
+
+            // 获取记录总数
+            function getRecordCount() {
+                const transaction = db.transaction([storeName], "readonly");
+                const store = transaction.objectStore(storeName);
+                const request = store.count();
+
+                return new Promise((resolve, reject) => {
+                    request.onerror = function (event) {
+                        reject(event.target.errorCode);
+                    };
+
+                    request.onsuccess = function (event) {
+                        resolve(event.target.result);
+                    };
+                });
+            }
+
+            // 导出Excel按钮事件
+            document
+                .getElementById("exportExcel")
+                .addEventListener("click", async function () {
+                    try {
+                        const transaction = db.transaction(
+                            [storeName],
+                            "readonly"
+                        );
+                        const store = transaction.objectStore(storeName);
+                        const request = store.getAll();
+
+                        request.onerror = function (event) {
+                            console.error(
+                                "Error getting all data:",
+                                event.target.errorCode
+                            );
+                        };
+
+                        request.onsuccess = function (event) {
+                            const data = request.result;
+
+                            // 创建一个工作簿对象
+                            const workbook = XLSX.utils.book_new();
+
+                            // 创建一个工作表对象
+                            const worksheet = XLSX.utils.json_to_sheet(data);
+
+                            // 将工作表添加到工作簿中
+                            XLSX.utils.book_append_sheet(
+                                workbook,
+                                worksheet,
+                                "Sheet1"
+                            );
+
+                            // 生成Excel文件名
+                            const building =
+                                document.getElementById("building").value;
+                            const room = document.getElementById("room").value;
+                            const fileName = `${building}${room}设备信息.xlsx`;
+
+                            // 生成Excel文件
+                            XLSX.writeFile(workbook, fileName);
+
+                            // 询问是否清除历史数据
+                            const shouldClear =
+                                confirm("导出成功！是否清除历史数据？");
+                            if (shouldClear) {
+                                clearDatabase();
+                                document.getElementById(
+                                    "statusMessage"
+                                ).innerHTML = "历史数据已清除";
+                            } else {
+                                document.getElementById(
+                                    "statusMessage"
+                                ).innerHTML = "历史数据未清除";
+                            }
+                        };
+                    } catch (error) {
+                        console.error("Error exporting data:", error);
+                    }
+                });
+
+            // 清除数据库中的所有数据
+            function clearDatabase() {
+                const transaction = db.transaction([storeName], "readwrite");
+                const store = transaction.objectStore(storeName);
+                store.clear();
+            }
+
+            // 条形码扫描按钮事件
+            document
+                .getElementById("scanBarcode")
+                .addEventListener("click", function () {
+                    startBarcodeScanner();
+                });
+        </script>
+    </body>
+</html>
