@@ -230,14 +230,16 @@
                                     "Initialization finished. Ready to start"
                                 );
                                 Quagga.start();
+
+                                Quagga.onDetected(function (result) {
+                                    const code = result.codeResult.code;
+                                    document.getElementById(
+                                        "assetNumber"
+                                    ).value = code;
+                                    stopBarcodeScanner();
+                                });
                             }
                         );
-
-                        Quagga.onDetected(function (result) {
-                            const code = result.codeResult.code;
-                            document.getElementById("assetNumber").value = code;
-                            stopBarcodeScanner();
-                        });
                     })
                     .catch((error) => {
                         console.error("Error accessing camera:", error);
