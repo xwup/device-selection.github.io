@@ -82,6 +82,7 @@
             "
         >
             <video id="video" autoplay playsinline></video>
+            <button id="closeCamera" class="inline-button">关闭摄像头</button>
         </div>
         <h1>机房设备信息登记V1</h1>
         <form id="dataForm">
@@ -293,6 +294,13 @@
                         alert(errorMessage);
                     });
             }
+
+            // 添加关闭按钮的事件监听器
+            document
+                .getElementById("closeCamera")
+                .addEventListener("click", function () {
+                    stopBarcodeScanner();
+                });
 
             // 停止条形码扫描
             function stopBarcodeScanner() {
