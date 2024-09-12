@@ -83,7 +83,7 @@
         >
             <video id="video" autoplay playsinline></video>
         </div>
-        <h1>机房设备信息登记V2</h1>
+        <h1>机房设备信息登记V1</h1>
         <form id="dataForm">
             <label for="building">楼栋:</label>
             <input
@@ -201,11 +201,20 @@
 
                 // 请求摄像头权限
                 navigator.mediaDevices
-                    .getUserMedia({ video: { facingMode: "environment" } })
+                    .getUserMedia({
+                        video: { facingMode: "environment", zoom: 1.0 },
+                    })
                     .then((stream) => {
                         const video = document.getElementById("video");
+                        video.addEventListener("click", () => {
+                            video.focus();
+                            video.dispatchEvent(new Event("focus"));
+                        });
                         video.srcObject = stream;
                         video.play();
+                        // 设置视频尺寸
+                        video.width = 320;
+                        video.height = 240;
                         // 成功获取摄像头流
                         Quagga.init(
                             {
