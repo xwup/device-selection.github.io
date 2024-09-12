@@ -124,19 +124,16 @@
                 oninput="this.value = this.value.replace(/[^0-9-]/g, '').trim();"
             />
 
-            <!-- 移除原有的视频流相关代码 -->
-            <!-- <div
-    id="scannerContainer"
-    style="
-        position: relative;
-        width: 320px;
-        height: 240px;
-        display: none;
-    "
->
-    <video id="video" autoplay playsinline></video>
-    <button id="closeCamera" class="inline-button">关闭摄像头</button>
-</div> -->
+            <!-- 增加预览界面 -->
+            <div id="previewContainer" style="display: none">
+                <video
+                    id="video"
+                    autoplay
+                    playsinline
+                    style="width: 100%; max-width: 320px"
+                ></video>
+                <button id="takePhotoButton" class="inline-button">拍照</button>
+            </div>
 
             <!-- 增加拍照按钮 -->
             <label for="assetNumber">资产编号:</label>
@@ -197,47 +194,70 @@
                 }
             };
 
-            // 新增拍照并识别条形码的函数
+            // 增加预览界面的显示逻辑
+            function showPreview() {
+                document.getElementById("previewContainer").style.display =
+                    "block";
+                document.getElementById("scannerContainer").style.display =
+                    "none";
+            }
+
+            // 隐藏预览界面
+            function hidePreview() {
+                document.getElementById("previewContainer").style.display =
+                    "none";
+            }
+
+            // 修改拍照并识别条形码的函数
             function takePhotoAndRecognizeBarcode() {
                 // 请求摄像头权限
                 navigator.mediaDevices
                     .getUserMedia({ video: true })
                     .then((stream) => {
-                        const video = document.createElement("video");
+                        const video = document.getElementById("video");
                         video.srcObject = stream;
                         video.play();
 
-                        // 等待视频加载完成后拍照
-                        video.onloadedmetadata = () => {
-                            const canvas = document.createElement("canvas");
-                            canvas.width = video.videoWidth;
-                            canvas.height = video.videoHeight;
+                        // 显示预览界面
+                        showPreview();
 
-                            // 拍照
-                            canvas
-                                .getContext("2d")
-                                .drawImage(
-                                    video,
-                                    0,
-                                    0,
-                                    canvas.width,
-                                    canvas.height
-                                );
+                        // 绑定拍照按钮的点击事件
+                        document
+                            .getElementById("takePhotoButton")
+                            .addEventListener("click", function () {
+                                const canvas = document.createElement("canvas");
+                                canvas.width = video.videoWidth;
+                                canvas.height = video.videoHeight;
 
-                            // 关闭摄像头流
-                            video.srcObject
-                                .getTracks()
-                                .forEach((track) => track.stop());
+                                // 拍照
+                                canvas
+                                    .getContext("2d")
+                                    .drawImage(
+                                        video,
+                                        0,
+                                        0,
+                                        canvas.width,
+                                        canvas.height
+                                    );
 
-                            // 显示拍照结果
-                            const photoUrl = canvas.toDataURL();
-                            const photoElement = document.createElement("img");
-                            photoElement.src = photoUrl;
-                            document.body.appendChild(photoElement);
+                                // 关闭摄像头流
+                                video.srcObject
+                                    .getTracks()
+                                    .forEach((track) => track.stop());
 
-                            // 识别条形码
-                            recognizeBarcodeFromImage(photoUrl);
-                        };
+                                // 隐藏预览界面
+                                hidePreview();
+
+                                // 显示拍照结果
+                                const photoUrl = canvas.toDataURL();
+                                const photoElement =
+                                    document.createElement("img");
+                                photoElement.src = photoUrl;
+                                document.body.appendChild(photoElement);
+
+                                // 识别条形码
+                                recognizeBarcodeFromImage(photoUrl);
+                            });
                     })
                     .catch((error) => {
                         console.error("Error accessing camera:", error);
