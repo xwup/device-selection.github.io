@@ -14,7 +14,9 @@
     "roboto-fontface": "*",
     "vue": "^3.4.31",
     "vuetify": "^3.6.11",
+    "vue-router": "^4.4.0",
     "xlsx": "^0.18.5"
+    
   },
   "devDependencies": {
     "@babel/types": "^7.24.7",
@@ -35,6 +37,7 @@
     "unplugin-vue-components": "^0.27.2",
     "unplugin-vue-router": "^0.10.0",
     "vite": "^5.3.3",
+    "vite-plugin-singlefile": "^2.0.2",
     "vite-plugin-vuetify": "^2.0.3",
     "vue-router": "^4.4.0",
     "vue-tsc": "^2.0.26"

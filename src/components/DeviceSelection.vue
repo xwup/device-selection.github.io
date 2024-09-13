@@ -42,7 +42,7 @@
                 <v-container width="100%" justify="center" style="margin-top: 30%;">
                   <v-row align="center" justify="center">
                     <v-col style="padding: 0px; text-align: center;height: 20%; width: 60%;">
-                      <video ref="video" autoplay id="video" width="100%"></video>
+                      <video ref="videoRef" id="videoRef" autoplay width="100%"></video>
                     </v-col>
                   </v-row>
                   <v-row align="center" justify="center">
@@ -64,10 +64,11 @@
       </div>
     </v-form>
   </v-sheet>
+  <div id="error-message"></div>
 </template>
 
 <script>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import * as XLSX from 'xlsx';
 import { BrowserMultiFormatReader } from '@zxing/library';
 
@@ -82,7 +83,6 @@ export default {
     const messageText = ref('');
     const snackColor = ref('');
 
-    const videoRef = ref(null);
     const overlayUpDown = ref(false);
 
     // 存储录入的数据
@@ -199,23 +199,45 @@ export default {
     // 打开摄像头
     const openCamara = async () => {
       overlayUpDown.value = true;
+
+      // 等待 videoRef 初始化完成
+      await waitForVideoReady();
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        const videoElement = document.getElementById('videoRef');
+        videoElement.srcObject = stream;
         videoRef.value.srcObject = stream;
         messageAlert('摄像头已打开……', tipAlert)
       } catch (error) {
         console.error("Failed to get camera access:", error);
         messageAlert('摄像头打开失败！', errorAlert)
+        // 在页面上打印错误信息
+        document.getElementById('error-message').innerText = `摄像头打开失败！错误信息: ${error.message}`;
+
       }
+    };
+
+    // 等待 videoRef 初始化完成
+    const waitForVideoReady = () => {
+      return new Promise((resolve) => {
+        const videoElement = document.getElementById('videoRef');
+        if (videoElement && videoElement.readyState >= videoElement.HAVE_CURRENT_DATA) {
+          resolve();
+        } else {
+          videoElement.addEventListener('loadedmetadata', resolve);
+        }
+      });
     };
 
     const catchThisPhoto = () => {
       // 这里可以添加拍照逻辑
       // 拍照逻辑
+      const videoElement = document.getElementById('videoRef');
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.value.videoWidth;
-      canvas.height = videoRef.value.videoHeight;
-      canvas.getContext('2d').drawImage(videoRef.value, 0, 0, canvas.width, canvas.height);
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
+      canvas.getContext('2d').drawImage(videoElement, 0, 0, canvas.width, canvas.height);
 
       // 转换为Base64字符串
       const photoData = canvas.toDataURL('image/jpeg');
@@ -239,13 +261,27 @@ export default {
     };
 
     const stopCamera = () => {
-      if (videoRef.value && videoRef.value.srcObject) {
-        const tracks = videoRef.value.srcObject.getTracks();
+      const videoElement = document.getElementById('videoRef');
+      if (videoElement && videoElement.srcObject) {
+        const tracks = videoElement.srcObject.getTracks();
         tracks.forEach(track => track.stop());
-        videoRef.value.srcObject = null;
+        videoElement.srcObject = null;
       }
       overlayUpDown.value = false;
     };
+
+    // 在 DOM 渲染完成后确保 videoRef 已经初始化
+    onMounted(() => {
+      // 确保 DOM 已经渲染完毕
+      setTimeout(() => {
+        const videoElement = document.getElementById('videoRef');
+        if (videoElement) {
+          console.log('videoRef 已经初始化');
+        } else {
+          console.error('videoRef 未初始化');
+        }
+      }, 500);
+    });
 
     return {
       building,

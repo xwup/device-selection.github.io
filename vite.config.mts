@@ -8,11 +8,15 @@ import VueRouter from 'unplugin-vue-router/vite'
 // Utilities
 import { defineConfig } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
+// 增加配置，始得文件打包到单个html文件中
+// import {viteSingleFile} from "vite-plugin-singlefile"
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     VueRouter(),
+    // 增加配置，始得文件打包到单个html文件中
+    // viteSingleFile(),
     Vue({
       template: { transformAssetUrls },
     }),
@@ -53,7 +57,7 @@ export default defineConfig({
   },
   build: {
     // 自定义输出文件夹
-    outDir: 'docs',
+    outDir: '../github-pages/device-selection.github.io',
   },
   base: './', // 默认为 /, 修改为相对路径
 })
