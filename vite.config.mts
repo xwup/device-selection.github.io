@@ -53,7 +53,7 @@ export default defineConfig({
   },
   build: {
     // 自定义输出文件夹
-    outDir: 'docs',
+    outDir: '../githubpages/device-selection.github.io',
   },
   base: './', // 默认为 /, 修改为相对路径
 })
