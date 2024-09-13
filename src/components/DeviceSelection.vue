@@ -37,21 +37,26 @@
             <v-text-field v-model="assetNumber" label="资产编号"></v-text-field>
           </v-col>
           <v-col style="padding: 0px; width: 20%; flex-basis:auto;">
-            <v-btn class="text-none mb-4" color="indigo-darken-3">拍条码
+            <v-btn class="text-none mb-4" color="indigo-darken-3" id="startButton">拍条码
               <v-overlay v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block"
                 style="justify-content: center;">
                 <v-container width="100%" justify="center" style="margin-top: 30%;">
                   <v-row align="center" justify="center">
                     <v-col style="padding: 0px; text-align: center;height: 20%; width: 60%;">
-                      <video ref="videoRef" autoplay width="100%" height="200px"></video>
+                      <video ref="videoRef" autoplay width="100%" height="200px" id="video"></video>
                       <img style="display:none;" :src="imgSrc" ref="imgRef" alt="截屏" width="100%" height="200px"></img>
+                      <div id="sourceSelectPanel" style="display:none">
+                        <label for="sourceSelect">Change video source:</label>
+                        <select id="sourceSelect" style="max-width:400px">
+                        </select>
+                      </div>
                     </v-col>
                   </v-row>
-                  <v-row align="center" justify="center">
+                  <!-- <v-row align="center" justify="center">
                     <v-col style="padding: 0px; text-align: center;">
-                      <v-btn class="text-none" color="indigo-darken-3" @click="catchThisPhoto">拍摄</v-btn>
+                      <v-btn class="text-none" color="indigo-darken-3" id="startButton">拍摄</v-btn>
                     </v-col>
-                  </v-row>
+                  </v-row> -->
                 </v-container>
               </v-overlay>
             </v-btn>
@@ -70,9 +75,9 @@
 </template>
 
 <script>
-import { ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import * as XLSX from 'xlsx';
-import { BrowserMultiFormatReader } from '@zxing/library';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
 
 export default {
   setup() {
@@ -93,6 +98,7 @@ export default {
 
     // 存储录入的数据
     const recordedData = ref([]);
+
 
     const successAlert = "#4CAF50"
     const errorAlert = "#F44336"
@@ -205,25 +211,70 @@ export default {
     // 监听 overlayUpDown 的值变化
     watch(overlayUpDown, (newValue, oldValue) => {
       if (!newValue) {
-        console.log(overlayUpDown.value)
-        stopCamera();
-      } else {
-        console.log(overlayUpDown.value)
-        openCamara();
+        codeReader.reset()
       }
+      // else {
+      //   console.log(overlayUpDown.value)
+      //   openCamara();
+      // }
+    });
+
+    const codeReader = new BrowserMultiFormatReader();
+    onMounted(() => {
+      openCamara();
     });
     // 打开摄像头
-    const openCamara = async () => {
+    const openCamara = () => {
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        videoRef.value.srcObject = stream;
-        console.log(videoRef.value)
-        messageAlert('摄像头已打开……', tipAlert)
-      } catch (error) {
-        console.error("Failed to get camera access:", error);
-        messageAlert('摄像头打开失败！', errorAlert)
-      }
+      // try {
+      //   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      //   videoRef.value.srcObject = stream;
+      //   console.log(videoRef.value)
+      //   messageAlert('摄像头已打开……', tipAlert)
+      // } catch (error) {
+      //   console.error("Failed to get camera access:", error);
+      //   messageAlert('摄像头打开失败！', errorAlert)
+      // }
+      // 解析条形码
+      let selectedDeviceId;
+      codeReader.listVideoInputDevices()
+        .then((videoInputDevices) => {
+          const sourceSelect = document.getElementById('sourceSelect')
+          selectedDeviceId = videoInputDevices[0].deviceId
+          if (videoInputDevices.length >= 1) {
+            videoInputDevices.forEach((element) => {
+              const sourceOption = document.createElement('option')
+              sourceOption.text = element.label
+              sourceOption.value = element.deviceId
+              sourceSelect.appendChild(sourceOption)
+            })
+
+            sourceSelect.onchange = () => {
+              selectedDeviceId = sourceSelect.value;
+            };
+
+            const sourceSelectPanel = document.getElementById('sourceSelectPanel')
+            sourceSelectPanel.style.display = 'block'
+          }
+
+          document.getElementById('startButton').addEventListener('click', () => {
+            codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+              if (result) {
+                assetNumber.value = result.text;
+                messageAlert('条形码解析成功', successAlert)
+                overlayUpDown.value = false;
+                codeReader.reset();
+              }
+              if (err && !(err instanceof NotFoundException)) {
+                messageAlert('条形码解析失败' + err.name, errorAlert)
+                codeReader.reset();
+              }
+            })
+          })
+        })
+        .catch((err) => {
+          console.error(err)
+        })
     };
 
     const catchThisPhoto = async () => {
