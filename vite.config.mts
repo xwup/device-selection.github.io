@@ -51,4 +51,8 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  build: {
+    // 自定义输出文件夹
+    outDir: 'docs',
+  },
 })
