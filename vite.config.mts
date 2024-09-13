@@ -55,5 +55,5 @@ export default defineConfig({
     // 自定义输出文件夹
     outDir: 'docs',
   },
-  base: './', // 默认为 /, 修改为相对路径
+  base: '.', // 默认为 /, 修改为相对路径
 })
