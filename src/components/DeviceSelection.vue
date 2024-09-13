@@ -256,7 +256,7 @@ export default {
             const sourceSelectPanel = document.getElementById('sourceSelectPanel')
             sourceSelectPanel.style.display = 'block'
           }
-
+// todo 这里需要修改一些逻辑，是的切换摄像头可以立即响应
           document.getElementById('startButton').addEventListener('click', () => {
             codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
               if (result) {
