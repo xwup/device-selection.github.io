@@ -1,5 +1,4 @@
 <template>
-
   <v-sheet class="mx-auto" width="300">
     <h1 class="my-4">机房信息登记</h1>
     <v-snackbar :timeout="3000" v-model="messageBox" :color="snackColor">
@@ -38,11 +37,20 @@
             <v-text-field v-model="assetNumber" label="资产编号"></v-text-field>
           </v-col>
           <v-col style="padding: 0px; width: 20%; flex-basis:auto;">
-            <v-btn class="text-none mb-4" color="indigo-darken-3" @click="scanBarcode">拍照
-              <v-overlay activator="parent" location-strategy="connected" scroll-strategy="block">
-                <v-sheet elevation="6" height="80%" width="80%" border>
-                  <video ref="video" autoplay id="video" width="100%"></video>
-                </v-sheet>
+            <v-btn class="text-none mb-4" color="indigo-darken-3" @click="openCamara">拍条码
+              <v-overlay v-model="overlayUpDown" scroll-strategy="block" style="justify-content: center;">
+                <v-container width="100%" justify="center" style="margin-top: 30%;">
+                  <v-row align="center" justify="center">
+                    <v-col style="padding: 0px; text-align: center;height: 20%; width: 60%;">
+                      <video ref="video" autoplay id="video" width="100%"></video>
+                    </v-col>
+                  </v-row>
+                  <v-row align="center" justify="center">
+                    <v-col style="padding: 0px; text-align: center;">
+                      <v-btn class="text-none" color="indigo-darken-3" @click="catchThisPhoto">拍摄</v-btn>
+                    </v-col>
+                  </v-row>
+                </v-container>
               </v-overlay>
             </v-btn>
           </v-col>
@@ -50,8 +58,7 @@
       </v-container>
 
       <div class="d-flex justify-space-between mt-2">
-        <v-btn @click="exportExcel" class="text-none mb-4" color="grey-lighten-3" size="x-large"
-          variant="flat">导出</v-btn>
+        <v-btn @click="exportExcel" class="text-none mb-4" color="grey-lighten-3" size="x-large" variant="flat">导出</v-btn>
         <v-btn class="text-none mb-4" color="indigo-darken-3" size="x-large" variant="flat" type="submit">录入</v-btn>
 
       </div>
@@ -75,11 +82,17 @@ export default {
     const messageText = ref('');
     const snackColor = ref('');
 
+    const videoRef = ref(null);
+    const overlayUpDown = ref(false);
+
     // 存储录入的数据
     const recordedData = ref([]);
 
     const successAlert = "#4CAF50"
     const errorAlert = "#F44336"
+    const tipAlert = "#FFC107"
+
+
 
 
     // 规则定义
@@ -183,16 +196,55 @@ export default {
       XLSX.writeFile(workbook, '机房设备信息.xlsx');
     };
 
-    // 扫描条形码
-    const scanBarcode = async () => {
+    // 打开摄像头
+    const openCamara = async () => {
+      overlayUpDown.value = true;
       try {
-        const reader = new BrowserMultiFormatReader();
-        const result = await reader.decodeFromVideoDevice(undefined, 'video');
-        assetNumber.value = result.text;
-        messageAlert('扫描成功', successAlert);
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        videoRef.value.srcObject = stream;
+        messageAlert('摄像头已打开……', tipAlert)
       } catch (error) {
-        messageAlert('扫描失败，请重试', errorAlert);
+        console.error("Failed to get camera access:", error);
+        messageAlert('摄像头打开失败！', errorAlert)
       }
+    };
+
+    const catchThisPhoto = () => {
+      // 这里可以添加拍照逻辑
+      // 拍照逻辑
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.value.videoWidth;
+      canvas.height = videoRef.value.videoHeight;
+      canvas.getContext('2d').drawImage(videoRef.value, 0, 0, canvas.width, canvas.height);
+
+      // 转换为Base64字符串
+      const photoData = canvas.toDataURL('image/jpeg');
+
+      // 关闭相机并隐藏遮罩层
+      stopCamera();
+
+      // 解析条形码
+      parseBarcode(photoData).then(barcodeValue => {
+        assetNumber.value = barcodeValue;
+      }).catch(error => {
+        console.error('Error parsing barcode:', error);
+      });
+    };
+
+    // 使用 @zxing/library 解析条形码
+    const parseBarcode = async (photoData) => {
+      const reader = new BrowserMultiFormatReader();
+      const result = await reader.decode(photoData);
+      return result.text;
+    };
+
+    const stopCamera = () => {
+      if (videoRef.value && videoRef.value.srcObject) {
+        const tracks = videoRef.value.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        videoRef.value.srcObject = null;
+      }
+      overlayUpDown.value = false;
     };
 
     return {
@@ -210,7 +262,9 @@ export default {
       deviceLayerRules,
       handleRecord,
       exportExcel,
-      scanBarcode,
+      openCamara,
+      catchThisPhoto,
+      overlayUpDown,
     };
   },
 };
