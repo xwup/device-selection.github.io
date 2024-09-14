@@ -9,8 +9,9 @@ declare module 'vue' {
   export interface GlobalComponents {
     DeviceSelection: typeof import('./src/components/DeviceSelection.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
+    QuaggaScan: typeof import('./src/components/QuaggaScan.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    ScanVideo: typeof import('./src/components/scanVideo.vue')['default']
+    ScanVideo: typeof import('./src/components/ScanVideo.vue')['default']
   }
 }

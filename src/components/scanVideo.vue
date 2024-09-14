@@ -23,7 +23,7 @@
 import { BrowserMultiFormatReader } from '@zxing/library';
 
 export default {
-    name: 'scanVideo',
+    name: 'ScanVideo',
     data() {
         return {
             codeReader: null,
