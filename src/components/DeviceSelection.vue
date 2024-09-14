@@ -37,13 +37,36 @@
             <v-text-field v-model="assetNumber" label="资产编号"></v-text-field>
           </v-col>
           <v-col style="padding: 0px; width: 20%; flex-basis:auto;">
-            <v-btn class="text-none mb-4" color="indigo-darken-3" @click="parseBarcode">拍条码</v-btn>
+            <v-btn class="text-none mb-4" color="indigo-darken-3" id="startButton">拍条码
+              <v-overlay v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block"
+                style="justify-content: center;">
+                <v-container width="100%" justify="center" style="margin-top: 30%;">
+                  <v-row align="center" justify="center">
+                    <v-col style="padding: 0px; text-align: center;height: 20%; width: 60%;">
+                      <video ref="videoRef" autoplay width="100%" height="200px" id="video"></video>
+                      <img style="display:none;" :src="imgSrc" ref="imgRef" alt="截屏" width="100%" height="200px"></img>
+                      <div id="sourceSelectPanel" style="display:none">
+                        <label for="sourceSelect">Change video source:</label>
+                        <select id="sourceSelect" style="max-width:400px">
+                        </select>
+                      </div>
+                    </v-col>
+                  </v-row>
+                  <!-- <v-row align="center" justify="center">
+                    <v-col style="padding: 0px; text-align: center;">
+                      <v-btn class="text-none" color="indigo-darken-3" id="startButton">拍摄</v-btn>
+                    </v-col>
+                  </v-row> -->
+                </v-container>
+              </v-overlay>
+            </v-btn>
           </v-col>
         </v-row>
       </v-container>
 
       <div class="d-flex justify-space-between mt-2">
-        <v-btn @click="exportExcel" class="text-none mb-4" color="grey-lighten-3" size="x-large" variant="flat">导出</v-btn>
+        <v-btn @click="exportExcel" class="text-none mb-4" color="grey-lighten-3" size="x-large"
+          variant="flat">导出</v-btn>
         <v-btn class="text-none mb-4" color="indigo-darken-3" size="x-large" variant="flat" type="submit">录入</v-btn>
       </div>
     </v-form>
@@ -53,10 +76,9 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import * as XLSX from 'xlsx';
-import { BrowserMultiFormatReader } from '@zxing/library';
-import scanVideo from './scanVideo.vue';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
 
 export default {
   setup() {
@@ -69,8 +91,15 @@ export default {
     const messageText = ref('');
     const snackColor = ref('');
 
+    const videoRef = ref(null);
+    const overlayUpDown = ref(false);
+    const imgShow = ref(false);
+    const imgRef = ref(null);
+    const imgSrc = ref('');
+
     // 存储录入的数据
     const recordedData = ref([]);
+
 
     const successAlert = "#4CAF50"
     const errorAlert = "#F44336"
@@ -170,6 +199,115 @@ export default {
       XLSX.writeFile(workbook, '机房设备信息.xlsx');
     };
 
+    // 监听 overlayUpDown 的值变化
+    watch(overlayUpDown, (newValue, oldValue) => {
+      if (!newValue) {
+        codeReader.reset()
+      }
+      // else {
+      //   console.log(overlayUpDown.value)
+      //   openCamara();
+      // }
+    });
+
+    const codeReader = new BrowserMultiFormatReader();
+    onMounted(() => {
+      openCamara();
+    });
+    // 打开摄像头
+    const openCamara = () => {
+
+      // try {
+      //   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      //   videoRef.value.srcObject = stream;
+      //   console.log(videoRef.value)
+      //   messageAlert('摄像头已打开……', tipAlert)
+      // } catch (error) {
+      //   console.error("Failed to get camera access:", error);
+      //   messageAlert('摄像头打开失败！', errorAlert)
+      // }
+      // 解析条形码
+      let selectedDeviceId;
+      codeReader.listVideoInputDevices()
+        .then((videoInputDevices) => {
+          const sourceSelect = document.getElementById('sourceSelect')
+          selectedDeviceId = videoInputDevices[0].deviceId
+          if (videoInputDevices.length >= 1) {
+            videoInputDevices.forEach((element) => {
+              const sourceOption = document.createElement('option')
+              sourceOption.text = element.label
+              sourceOption.value = element.deviceId
+              sourceSelect.appendChild(sourceOption)
+            })
+
+            sourceSelect.onchange = () => {
+              selectedDeviceId = sourceSelect.value;
+            };
+
+            const sourceSelectPanel = document.getElementById('sourceSelectPanel')
+            sourceSelectPanel.style.display = 'block'
+          }
+// todo 这里需要修改一些逻辑，是的切换摄像头可以立即响应
+          document.getElementById('startButton').addEventListener('click', () => {
+            codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+              if (result) {
+                assetNumber.value = result.text;
+                messageAlert('条形码解析成功', successAlert)
+                overlayUpDown.value = false;
+                codeReader.reset();
+              }
+              if (err && !(err instanceof NotFoundException)) {
+                messageAlert('条形码解析失败' + err.name, errorAlert)
+                codeReader.reset();
+              }
+            })
+          })
+        })
+        .catch((err) => {
+          console.error(err)
+        })
+    };
+
+    const catchThisPhoto = async () => {
+      // 这里可以添加拍照逻辑
+      // 拍照逻辑
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.value.videoWidth;
+      canvas.height = videoRef.value.videoHeight;
+      canvas.getContext('2d').drawImage(videoRef.value, 0, 0, canvas.width, canvas.height);
+      // 显示图片框
+      imgShow.value = true;
+      await new Promise(resolve => setTimeout(resolve, 100));
+      stopCamera();
+      // 转换为Base64字符串
+      const photoData = canvas.toDataURL('image/png');
+      imgSrc.value = photoData;
+
+      console.log(imgRef.value)
+
+
+
+      // 解析条形码
+      const reader = new BrowserMultiFormatReader();
+      reader.decodeFromImage(imgRef.value).then(result => {
+        console.log('Decoded barcode:', result);
+        assetNumber.value = result.text;
+        messageAlert('条形码解析成功', successAlert)
+      }).catch(error => {
+        messageAlert(`条形码解析失败` + error.name, errorAlert)
+      });
+      overlayUpDown.value = false;
+      stopCamera();
+    };
+
+    const stopCamera = () => {
+      if (videoRef.value && videoRef.value.srcObject) {
+        const tracks = videoRef.value.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        videoRef.value.srcObject = null;
+      }
+    };
+
     return {
       building,
       messageBox,
@@ -185,6 +323,12 @@ export default {
       deviceLayerRules,
       handleRecord,
       exportExcel,
+      catchThisPhoto,
+      overlayUpDown,
+      videoRef,
+      imgShow,
+      imgRef,
+      imgSrc
     };
   },
 };
