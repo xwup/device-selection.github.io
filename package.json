@@ -14,7 +14,9 @@
     "vue": "^3.4.31",
     "vue-router": "^4.4.0",
     "vuetify": "^3.6.11",
+    "quagga": "^0.12.1",
     "xlsx": "^0.18.5"
+    
   },
   "devDependencies": {
     "@babel/types": "^7.24.7",

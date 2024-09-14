@@ -33,6 +33,11 @@
           </v-col>
         </v-row>
         <v-row align="center" justify="center">
+          <v-col style="padding: 0px;">
+            <img style="width: 80%; height: 80%" :src="imgSrc" :style="{display: imgShow ? 'block' : 'none'}" />
+          </v-col>
+        </v-row>
+        <v-row align="center" justify="center">
           <v-col style="padding: 0px; width: 80%; flex-basis:auto;">
             <v-text-field v-model="assetNumber" label="资产编号"></v-text-field>
           </v-col>
@@ -40,9 +45,10 @@
             <v-btn class="text-none mb-4" color="indigo-darken-3" @click="startScanning">拍条码
               <v-overlay v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block"
                 style="justify-items: center; align-items: center;">
-                <div id="interactive" class="viewport" ref="interactive" :style="{ display: interactive ? 'block' : 'none' }"></div>
+                <div id="interactive" class="viewport"  :style="{ display: interactive ? 'block' : 'none' }"></div>
 
-                  <v-select max-width="300px" v-model="deviceSelect" label="镜头选择" :style="deviceSelections.length > 0 ? { display: 'block' } : { display: 'none' }"
+                <v-select max-width="300px" v-model="deviceSelect" label="镜头选择"
+                  :style="deviceSelections.length > 0 ? { display: 'block' } : { display: 'none' }"
                   :items="deviceSelections" :item-props="deviceSellection" variant="solo" width="100%"></v-select>
 
 
@@ -52,7 +58,8 @@
         </v-row>
       </v-container>
       <div class="d-flex justify-space-between mt-2">
-        <v-btn @click="exportExcel" class="text-none mb-4" color="grey-lighten-3" size="x-large" variant="flat">导出</v-btn>
+        <v-btn @click="exportExcel" class="text-none mb-4" color="grey-lighten-3" size="x-large"
+          variant="flat">导出</v-btn>
         <v-btn class="text-none mb-4" color="indigo-darken-3" size="x-large" variant="flat" type="submit">录入</v-btn>
       </div>
     </v-form>
@@ -86,9 +93,18 @@ import Quagga from 'quagga';
 
 export default {
   watch: {
+    overlayUpDown(newValue, oldValue) {
+      console.log('overlayUpDown', newValue)
+      if (!newValue) {
+        this.stopScanning();
+      }
+    },
     // 监听设备选择
     deviceSelect(newValue, oldValue) {
-      console.log(newValue);
+      console.log(newValue)
+      this.options.inputStream.constraints.deviceId = newValue;
+      this.stopScanning();
+      this.startScanning();
     }
   },
   data() {
@@ -131,7 +147,33 @@ export default {
     // 扫描相关
     const deviceSelections = ref([{ title: 'sdfgsd', subtitle: '39s88g90s0' }, { title: 'fhhsdf', subtitle: '4436gt422' }]);
     const deviceSelect = ref('');
-    const interactive = ref(false)
+    const interactive = ref(false);
+    const imgShow = ref(false);
+    const imgSrc = ref('');
+    let options = {
+        inputStream: {
+          debug: { showCanvas: true, showPatches: true, showFoundPatches: true, drawBoundingBox: true, drawScanline: true },
+          type: "LiveStream",
+          // target: "#interactive", // 可以指定视频输出的容器，也可以不设置会自动查找 class=viewport的元素作为容器
+          constraints: {
+            width: { min: 640 },
+            height: { min: 480 },
+            facingMode: "environment",
+            aspectRatio: { min: 1, max: 2 }
+          }
+        },
+        locator: {
+          patchSize: "medium",
+          halfSample: true
+        },
+        numOfWorkers: 4,
+        frequency: 10,
+        decoder: {
+          //
+          readers: ["code_128_reader","ean_reader", "ean_8_reader", "code_39_vin_reader", "codabar_reader"]
+        },
+        locate: true
+      }
 
     // 存数据相关
     const building = ref('');
@@ -241,39 +283,23 @@ export default {
           function pruneText(text) {
             return text.length > 30 ? text.substr(0, 30) : text;
           }
-          // deviceSelections.value = [];
+          deviceSelections.value = [];
           devices.forEach(function (device) {
             deviceSelect.value = streamLabel
-            // deviceSelections.value.push({title: pruneText(device.label), subtitle: device.id});
+            deviceSelections.value.push({ title: pruneText(device.label), subtitle: device.id });
           });
         });
     };
 
+    const stopScanning = () => {
+      Quagga.stop();
+      interactive.value = false;
+    };
     const startScanning = () => {
+      let lastResult = '';
+      imgShow.value = false;
+      interactive.value = true;
       // console.log('Start scanning...');
-      const options = {
-        inputStream: {
-          debug: { showCanvas: true, showPatches: true, showFoundPatches: true, drawBoundingBox: true, drawScanline: true },
-          type: "LiveStream",
-          // target: "#interactive", // 可以指定视频输出的容器，也可以不设置会自动查找 class=viewport的元素作为容器
-          constraints: {
-            width: { min: 640 },
-            height: { min: 480 },
-            facingMode: "environment",
-            aspectRatio: { min: 1, max: 2 }
-          }
-        },
-        locator: {
-          patchSize: "medium",
-          halfSample: true
-        },
-        numOfWorkers: 4,
-        frequency: 10,
-        decoder: {
-          readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_vin_reader", "codabar_reader"]
-        },
-        locate: true
-      }
 
       Quagga.init(options, function (err) {
         if (err) {
@@ -281,35 +307,26 @@ export default {
           // console.error(err)
           // return
         }
-        console.log('init成功')
         initCameraSelection();
 
-        // 注册结果收集器，在识别到结果时打印到控制台
-        let resultCollector = Quagga.ResultCollector.create({
-          capture: true,
-          capacity: 20,
-          blacklist: [{
-            code: "WIWV8ETQZ1", format: "code_93"
-          }, {
-            code: "EH3C-%GU23RK3", format: "code_93"
-          }],
-          filter: function (codeResult) {
-            // only store results which match this constraint
-            // e.g.: codeResult
-            console.log('codeResult', codeResult)
-            return true;
-          }
-        });
-        Quagga.registerResultCollector(resultCollector);
-        // -- 注册结果收集器 end
-
         Quagga.onDetected(function (result) {
-          // 识别到结果，打印数据
-          console.log('resultCollector', resultCollector.getResults())
+          if (lastResult !== result.codeResult.code) {
+            lastResult = result.codeResult.code;
+            assetNumber.value = result.codeResult.code
+            // 关闭遮罩
+            overlayUpDown.value = false
+            interactive.value = false;
+
+            messageAlert('识别成功', successAlert);
+            let canvas = Quagga.canvas.dom.image;
+            imgSrc.value = canvas.toDataURL();
+            imgShow.value = true;
+            // 关闭视频
+            Quagga.stop();
+          }
         });
 
         Quagga.start();
-        console.log("Initialization finished. Ready to start");
 
       });
 
@@ -360,7 +377,11 @@ export default {
       deviceSelect,
       // 扫描相关
       startScanning,
-      interactive
+      interactive,
+      imgSrc,
+      imgShow,
+      stopScanning,
+      options,
     };
   },
   methods: {

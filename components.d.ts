@@ -12,6 +12,6 @@ declare module 'vue' {
     QuaggaScan: typeof import('./src/components/QuaggaScan.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    ScanVideo: typeof import('./src/components/ScanVideo.vue')['default']
+    ScanVideo: typeof import('./src/components/scanVideo.vue')['default']
   }
 }
