@@ -42,10 +42,10 @@
             <v-text-field v-model="assetNumber" label="资产编号"></v-text-field>
           </v-col>
           <v-col style="padding: 0px; width: 20%; flex-basis:auto;">
-            <v-btn class="text-none mb-4" color="indigo-darken-3" @click="clickScan">拍条码
+            <v-btn class="text-none mb-4" color="indigo-darken-3" @click="startScanning">拍条码
               <v-overlay v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block">
                 <v-container width="100%">
-                  <v-row align="center" justify="center">
+                  <v-row>
                     <v-col style="padding: 0px;">
                       <div id="interactive" class="viewport" :style="{ display: interactive ? 'block' : 'none' }"></div>
                     </v-col>
@@ -55,6 +55,11 @@
                       <v-select max-width="300px" v-model="deviceSelect" label="镜头选择"
                         :style="deviceSelections.length > 0 ? { display: 'block' } : { display: 'none' }"
                         :items="deviceSelections" :item-props="deviceSellection" variant="solo" width="100%"></v-select>
+                    </v-col>
+                  </v-row>
+                  <v-row align="center" justify="center">
+                    <v-col style="padding: 0px; ">
+                      <v-btn icon="mdi-close" @click="overlayUpDown = false"></v-btn>
                     </v-col>
                   </v-row>
                 </v-container>
@@ -79,14 +84,8 @@
   height: 480px;
   display: block;
 
+  video,
   canvas {
-    float: left;
-    width: 640px;
-    height: 480px;
-    display: none;
-  }
-
-  video {
     float: left;
     width: 640px;
     height: 480px;
@@ -94,7 +93,7 @@
 
   canvas.drawingBuffer,
   video.drawingBuffer {
-    margin-left: 0px;
+    margin-left: -640px;
   }
 }
 </style>
@@ -107,57 +106,30 @@ import Quagga from 'quagga';
 export default {
   watch: {
     overlayUpDown(newValue, oldValue) {
-      console.log('overlayUpDown', newValue)
+      // console.log('overlayUpDown', newValue)
       if (!newValue) {
-        this.stopScanning();
+        Quagga.stop();
+        this.overlayUpDown = false;
       }
     },
     // 监听设备选择
-    deviceSelect(newValue, oldValue) {
-      console.log(newValue)
-      this.options.inputStream.constraints['deviceId'] = newValue;
-      this.stopScanning();
+    async deviceSelect(newValue, oldValue) {
+      const selectedItem = this.deviceSelections.find(item => item.title === newValue);
+      this.messageAlert('当前镜头为:' + selectedItem.title, this.tipAlert);
+      this.options.inputStream.constraints['deviceId'] = selectedItem.subtitle;
+      Quagga.stop();
+      try {
+        await this.delay(50);
+      } catch (error) {
+        console.error(error);
+      }
       this.startScanning();
     }
   },
-  data() {
-    return {
-      state:
-      // 定义应用的各种状态和配置
-      {
-        // 定义输入流的配置
-        inputStream: {
-          type: "LiveStream", // 输入流类型为实时流
-          constraints: { // 输入流的约束条件
-            width: { min: 640 }, // 宽度最小值为640像素
-            height: { min: 480 }, // 高度最小值为480像素
-            aspectRatio: { min: 1, max: 100 }, // 长宽比的最小和最大值
-            facingMode: "environment" // 摄像头面向环境，也可以是用户
-          }
-        },
-        // 定义定位器的配置
-        locator: {
-          patchSize: "medium", // 中等大小的补丁
-          halfSample: true // 使用半采样
-        },
-        // 定义工作线程的数量
-        numOfWorkers: 2,
-        // 定义频率为每秒10次
-        frequency: 10,
-        // 定义解码器的配置
-        decoder: {
-          readers: [{ // 解码器的读取配置
-            format: "code_128_reader", // 使用的格式为code 128读取器
-            config: {} // 空的配置对象
-          }]
-        },
-        // 是否启用定位
-        locate: true
-      },
-    }
-  },
+
   setup() {
     // 扫描相关
+    let num = 0;
     const deviceSelections = ref([]);
     const deviceSelect = ref('');
     const interactive = ref(false);
@@ -172,7 +144,8 @@ export default {
           width: { min: 640 },
           height: { min: 480 },
           facingMode: "environment",
-          aspectRatio: { min: 1, max: 2 }
+          aspectRatio: { min: 1, max: 2 },
+          deviceId: Quagga.CameraAccess.getActiveStreamLabel()
         }
       },
       locator: {
@@ -282,14 +255,16 @@ export default {
       XLSX.writeFile(workbook, '机房设备信息.xlsx');
     };
 
+    const delay = (ms) => {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+
     /**
          * 初始化摄像头选择
          * 返回一个Promise对象，该对象在摄像头设备枚举完成后解析
          */
     const initCameraSelection = () => {
-      let streamLabel = Quagga.CameraAccess.getActiveStreamLabel();
-      messageAlert('当前镜头', streamLabel)
-
       return Quagga.CameraAccess.enumerateVideoDevices()
         .then(function (devices) {
           function pruneText(text) {
@@ -297,58 +272,59 @@ export default {
           }
           deviceSelections.value = [];
           devices.forEach(function (device) {
-            deviceSelect.value = streamLabel
-            deviceSelections.value.push({ title: pruneText(device.label), subtitle: device.id });
+            deviceSelections.value.push({ title: pruneText(device.label), subtitle: device.deviceId });
           });
+          options.inputStream.constraints['deviceId'] = deviceSelections.value[deviceSelections.value.length - 1].subtitle;
         });
     };
 
-    const stopScanning = () => {
-      Quagga.stop();
-      interactive.value = false;
-    };
-    const clickScan = () => {
-      startScanning();
-      initCameraSelection();
-      if (deviceSelections.value.length > 1) {
-        deviceSelect.value = deviceSelections.value[deviceSelections.value.length - 1].subtitle;
-      }
 
-    }
+    // const clickScan = async () => {
+    //   console.log(options)
+    //   try {
+    //     startScanning();
+    //     await initCameraSelection().then(() => {
+    //       // if (deviceSelections.value.length > 1) {
+    //       //   deviceSelect.value = deviceSelections.value[deviceSelections.value.length - 1].title;
+    //       // }
+    //     });
+    //   } catch (error) {
+    //     console.error('Error:', error);
+    //   }
+    // }
+
     const startScanning = () => {
+
       imgShow.value = false;
       interactive.value = true;
       let lastResult = '';
       // console.log('Start scanning...');
-
       Quagga.init(options, function (err) {
         if (err) {
-          console.log(err)
-          // console.error(err)
-          // return
+          console.log('num', num, err);
+          num += 1;
+          return;
         }
-
-        Quagga.onDetected(function (result) {
-          if (lastResult !== result.codeResult.code) {
-            lastResult = result.codeResult.code;
-            assetNumber.value = result.codeResult.code
-            // 关闭遮罩
-            overlayUpDown.value = false
-            interactive.value = false;
-
-            messageAlert('识别成功', successAlert);
-            let canvas = Quagga.canvas.dom.image;
-            imgSrc.value = canvas.toDataURL();
-            imgShow.value = true;
-            // 关闭视频
-            Quagga.stop();
-          }
-        });
-
         Quagga.start();
-
       });
 
+
+      Quagga.onDetected(function (result) {
+        if (lastResult !== result.codeResult.code) {
+          lastResult = result.codeResult.code;
+          assetNumber.value = result.codeResult.code
+          // 关闭遮罩
+          overlayUpDown.value = false
+          interactive.value = false;
+
+          messageAlert('识别成功', successAlert);
+          let canvas = Quagga.canvas.dom.image;
+          imgSrc.value = canvas.toDataURL();
+          imgShow.value = true;
+          // 关闭视频
+          Quagga.stop();
+        }
+      });
       // 处理识别过程数据，在视频图像上画线/画框
       Quagga.onProcessed(function (result) {
         const drawingCtx = Quagga.canvas.ctx.overlay,
@@ -372,10 +348,7 @@ export default {
           }
         }
       });
-
     };
-
-
     return {
       building,
       messageBox,
@@ -394,14 +367,17 @@ export default {
       overlayUpDown,
       deviceSelections,
       deviceSelect,
+      delay,
       // 扫描相关
       startScanning,
       interactive,
       imgSrc,
       imgShow,
-      clickScan,
-      stopScanning,
+      // clickScan,
       options,
+      messageAlert,
+      tipAlert,
+      initCameraSelection,
     };
   },
   methods: {
@@ -411,6 +387,9 @@ export default {
         subtitle: item.subtitle
       }
     }
+  },
+  mounted() {
+    this.initCameraSelection();
   }
 };
 
