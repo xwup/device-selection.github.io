@@ -34,7 +34,7 @@
         </v-row>
         <v-row align="center" justify="center">
           <v-col style="padding: 0px;">
-            <img style="width: 80%; height: 80%" :src="imgSrc" :style="{display: imgShow ? 'block' : 'none'}" />
+            <img style="width: 80%; height: 80%" :src="imgSrc" :style="{ display: imgShow ? 'block' : 'none' }" />
           </v-col>
         </v-row>
         <v-row align="center" justify="center">
@@ -42,16 +42,22 @@
             <v-text-field v-model="assetNumber" label="资产编号"></v-text-field>
           </v-col>
           <v-col style="padding: 0px; width: 20%; flex-basis:auto;">
-            <v-btn class="text-none mb-4" color="indigo-darken-3" @click="startScanning">拍条码
-              <v-overlay v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block"
-                style="justify-items: center; align-items: center;">
-                <div id="interactive" class="viewport"  :style="{ display: interactive ? 'block' : 'none' }"></div>
-
-                <v-select max-width="300px" v-model="deviceSelect" label="镜头选择"
-                  :style="deviceSelections.length > 0 ? { display: 'block' } : { display: 'none' }"
-                  :items="deviceSelections" :item-props="deviceSellection" variant="solo" width="100%"></v-select>
-
-
+            <v-btn class="text-none mb-4" color="indigo-darken-3" @click="clickScan">拍条码
+              <v-overlay v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block">
+                <v-container width="100%">
+                  <v-row align="center" justify="center">
+                    <v-col style="padding: 0px;">
+                      <div id="interactive" class="viewport" :style="{ display: interactive ? 'block' : 'none' }"></div>
+                    </v-col>
+                  </v-row>
+                  <v-row align="center" justify="center">
+                    <v-col style="padding: 0px;">
+                      <v-select max-width="300px" v-model="deviceSelect" label="镜头选择"
+                        :style="deviceSelections.length > 0 ? { display: 'block' } : { display: 'none' }"
+                        :items="deviceSelections" :item-props="deviceSellection" variant="solo" width="100%"></v-select>
+                    </v-col>
+                  </v-row>
+                </v-container>
               </v-overlay>
             </v-btn>
           </v-col>
@@ -71,8 +77,15 @@
 #interactive.viewport {
   width: 640px;
   height: 480px;
+  display: block;
 
-  canvas,
+  canvas {
+    float: left;
+    width: 640px;
+    height: 480px;
+    display: none;
+  }
+
   video {
     float: left;
     width: 640px;
@@ -81,7 +94,7 @@
 
   canvas.drawingBuffer,
   video.drawingBuffer {
-    margin-left: -640px;
+    margin-left: 0px;
   }
 }
 </style>
@@ -102,7 +115,7 @@ export default {
     // 监听设备选择
     deviceSelect(newValue, oldValue) {
       console.log(newValue)
-      this.options.inputStream.constraints.deviceId = newValue;
+      this.options.inputStream.constraints['deviceId'] = newValue;
       this.stopScanning();
       this.startScanning();
     }
@@ -145,35 +158,35 @@ export default {
   },
   setup() {
     // 扫描相关
-    const deviceSelections = ref([{ title: 'sdfgsd', subtitle: '39s88g90s0' }, { title: 'fhhsdf', subtitle: '4436gt422' }]);
+    const deviceSelections = ref([]);
     const deviceSelect = ref('');
     const interactive = ref(false);
     const imgShow = ref(false);
     const imgSrc = ref('');
     let options = {
-        inputStream: {
-          debug: { showCanvas: true, showPatches: true, showFoundPatches: true, drawBoundingBox: true, drawScanline: true },
-          type: "LiveStream",
-          // target: "#interactive", // 可以指定视频输出的容器，也可以不设置会自动查找 class=viewport的元素作为容器
-          constraints: {
-            width: { min: 640 },
-            height: { min: 480 },
-            facingMode: "environment",
-            aspectRatio: { min: 1, max: 2 }
-          }
-        },
-        locator: {
-          patchSize: "medium",
-          halfSample: true
-        },
-        numOfWorkers: 4,
-        frequency: 10,
-        decoder: {
-          //
-          readers: ["code_128_reader","ean_reader", "ean_8_reader", "code_39_vin_reader", "codabar_reader"]
-        },
-        locate: true
-      }
+      inputStream: {
+        debug: { showCanvas: true, showPatches: true, showFoundPatches: true, drawBoundingBox: true, drawScanline: true },
+        type: "LiveStream",
+        // target: "#interactive", // 可以指定视频输出的容器，也可以不设置会自动查找 class=viewport的元素作为容器
+        constraints: {
+          width: { min: 640 },
+          height: { min: 480 },
+          facingMode: "environment",
+          aspectRatio: { min: 1, max: 2 }
+        }
+      },
+      locator: {
+        patchSize: "medium",
+        halfSample: true
+      },
+      numOfWorkers: 4,
+      frequency: 10,
+      decoder: {
+        //
+        readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_vin_reader", "codabar_reader"]
+      },
+      locate: true
+    }
 
     // 存数据相关
     const building = ref('');
@@ -275,8 +288,7 @@ export default {
          */
     const initCameraSelection = () => {
       let streamLabel = Quagga.CameraAccess.getActiveStreamLabel();
-      console.log(streamLabel)
-      console.log(deviceSelections.value)
+      messageAlert('当前镜头', streamLabel)
 
       return Quagga.CameraAccess.enumerateVideoDevices()
         .then(function (devices) {
@@ -295,10 +307,18 @@ export default {
       Quagga.stop();
       interactive.value = false;
     };
+    const clickScan = () => {
+      startScanning();
+      initCameraSelection();
+      if (deviceSelections.value.length > 1) {
+        deviceSelect.value = deviceSelections.value[deviceSelections.value.length - 1].subtitle;
+      }
+
+    }
     const startScanning = () => {
-      let lastResult = '';
       imgShow.value = false;
       interactive.value = true;
+      let lastResult = '';
       // console.log('Start scanning...');
 
       Quagga.init(options, function (err) {
@@ -307,7 +327,6 @@ export default {
           // console.error(err)
           // return
         }
-        initCameraSelection();
 
         Quagga.onDetected(function (result) {
           if (lastResult !== result.codeResult.code) {
@@ -380,6 +399,7 @@ export default {
       interactive,
       imgSrc,
       imgShow,
+      clickScan,
       stopScanning,
       options,
     };
