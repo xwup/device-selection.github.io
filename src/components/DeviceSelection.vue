@@ -44,25 +44,34 @@
           <v-col style="padding: 0px; width: 20%; flex-basis:auto;">
             <v-btn class="text-none mb-4" color="indigo-darken-3" @click="startScanning">拍条码
               <v-overlay v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block">
-                <v-container width="100%">
-                  <v-row style="text-align: -webkit-center;">
+                <!-- <v-container width="100%">
+                  <v-row>
                     <v-col style="padding: 0px;">
                       <div id="interactive" class="viewport" :style="{ display: interactive ? 'block' : 'none' }"></div>
                     </v-col>
                   </v-row>
-                  <v-row align="center" justify="center" style="text-align: -webkit-center;">
+                  <v-row align="center" justify="center">
                     <v-col style="padding: 0px;">
                       <v-select max-width="300px" v-model="deviceSelect" label="镜头选择"
                         :style="deviceSelections.length > 0 ? { display: 'block' } : { display: 'none' }"
                         :items="deviceSelections" :item-props="deviceSellection" variant="solo" width="100%"></v-select>
                     </v-col>
                   </v-row>
-                  <v-row align="center" justify="center" style="text-align: -webkit-center;">
+                  <v-row align="center" justify="center">
                     <v-col style="padding: 0px; ">
                       <v-btn icon="mdi-close" @click="overlayUpDown = false"></v-btn>
                     </v-col>
                   </v-row>
-                </v-container>
+                </v-container> -->
+                <div id="interactive" class="viewport" :style="{ display: interactive ? 'block' : 'none' }"></div>
+                <div class="viewport2">
+                  <v-select max-width="300px" v-model="deviceSelect" label="镜头选择"
+                    :style="deviceSelections.length > 0 ? { display: 'block' } : { display: 'none' }"
+                    :items="deviceSelections" :item-props="deviceSellection" variant="solo" width="100%"></v-select>
+                </div>
+                <div class="viewport2">
+                  <v-btn icon="mdi-close" @click="overlayUpDown = false"></v-btn>
+                </div>
               </v-overlay>
             </v-btn>
           </v-col>
@@ -78,43 +87,77 @@
   <div id="error-message"></div>
 </template>
 
-<style scoped>
-#interactive.viewport {
-  width: v-bind(setWidth);
-  height: v-bind(setHight);
-  display: block;
-
-  video,
-  canvas {
-    float: left;
-    width: v-bind(setWidth);
-    height: v-bind(setHight);
-  }
-
-  canvas.drawingBuffer,
-  video.drawingBuffer {
-    margin-left: v-bind(-setWidth);
-  }
+<style>
+v-overlay {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 100%;
 }
 
-.v-overlay--scroll-blocked {
+.v-overlay__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.viewport2 {
+  position: relative;
+  display: flex;
   justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 20%;
+  overflow: hidden;
+}
+
+.viewport {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 60%;
+  overflow: hidden;
+
+  video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: auto;
+    height: 100%;
+    object-fit: contain;
+    /* 保证不裁剪 */
+  }
+
+  canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: auto;
+    height: 100%;
+  }
+
+  /* canvas.drawingBuffer,
+  video.drawingBuffer {
+    margin-left: -640px;
+  } */
 }
 </style>
 
 <script>
-import { ref, watch, computed, onMounted } from 'vue';
+import { ref, watch } from 'vue';
 import * as XLSX from 'xlsx';
 import Quagga from 'quagga';
 
 export default {
-  data() {
-    return {
-      // setWidth: 640,
-      // setHight: 480,
-      deviceSelections: [],
-    }
-  },
   watch: {
     overlayUpDown(newValue, oldValue) {
       // console.log('overlayUpDown', newValue)
@@ -125,20 +168,23 @@ export default {
     },
     // 监听设备选择
     async deviceSelect(newValue, oldValue) {
-      Quagga.stop();
       const selectedItem = this.deviceSelections.find(item => item.title === newValue);
-      this.chooseCamera(selectedItem);
+      this.messageAlert('当前镜头为:' + selectedItem.title, this.tipAlert);
+      this.options.inputStream.constraints['deviceId'] = selectedItem.subtitle;
+      Quagga.stop();
+      try {
+        await this.delay(50);
+      } catch (error) {
+        console.error(error);
+      }
       this.startScanning();
-      this.messageAlert('当前镜头为:' + newValue);
     }
   },
 
-
   setup() {
     // 扫描相关
-    let setWidth = 640;
-    let setHight = 480;
-    // const deviceSelections = ref([]);
+    let num = 0;
+    const deviceSelections = ref([]);
     const deviceSelect = ref('');
     const interactive = ref(false);
     const imgShow = ref(false);
@@ -149,8 +195,8 @@ export default {
         type: "LiveStream",
         // target: "#interactive", // 可以指定视频输出的容器，也可以不设置会自动查找 class=viewport的元素作为容器
         constraints: {
-          width: { min: 300 },
-          height: { min: 150 },
+          width: { min: 640 },
+          height: { min: 480 },
           facingMode: "environment",
           aspectRatio: { min: 1, max: 2 },
           deviceId: Quagga.CameraAccess.getActiveStreamLabel()
@@ -272,9 +318,34 @@ export default {
          * 初始化摄像头选择
          * 返回一个Promise对象，该对象在摄像头设备枚举完成后解析
          */
+    const initCameraSelection = () => {
+      return Quagga.CameraAccess.enumerateVideoDevices()
+        .then(function (devices) {
+          function pruneText(text) {
+            return text.length > 30 ? text.substr(0, 30) : text;
+          }
+          deviceSelections.value = [];
+          devices.forEach(function (device) {
+            deviceSelections.value.push({ title: pruneText(device.label), subtitle: device.deviceId });
+          });
+          options.inputStream.constraints['deviceId'] = deviceSelections.value[deviceSelections.value.length - 1].subtitle;
+        });
+    };
 
 
-
+    // const clickScan = async () => {
+    //   console.log(options)
+    //   try {
+    //     startScanning();
+    //     await initCameraSelection().then(() => {
+    //       // if (deviceSelections.value.length > 1) {
+    //       //   deviceSelect.value = deviceSelections.value[deviceSelections.value.length - 1].title;
+    //       // }
+    //     });
+    //   } catch (error) {
+    //     console.error('Error:', error);
+    //   }
+    // }
 
     const startScanning = () => {
 
@@ -284,8 +355,8 @@ export default {
       // console.log('Start scanning...');
       Quagga.init(options, function (err) {
         if (err) {
-          // console.log('num', num, err);
-          // num += 1;
+          console.log('num', num, err);
+          num += 1;
           return;
         }
         Quagga.start();
@@ -348,7 +419,7 @@ export default {
       handleRecord,
       exportExcel,
       overlayUpDown,
-      // deviceSelections,
+      deviceSelections,
       deviceSelect,
       delay,
       // 扫描相关
@@ -360,20 +431,8 @@ export default {
       options,
       messageAlert,
       tipAlert,
-      // initCameraSelection,
-      // chooseCamera,
-      setHight,
-      setWidth,
+      initCameraSelection,
     };
-  },
-  computed: {
-    setWidth: () => {
-      console.log('computed', this.setWidth)
-      return this.setWidth+`px`
-    },
-    setHight: () => {
-      return this.setHight+`px`
-    }
   },
   methods: {
     deviceSellection(item) {
@@ -381,34 +440,9 @@ export default {
         title: item.title,
         subtitle: item.subtitle
       }
-    },
-    chooseCamera(deviceItem) {
-      this.options.inputStream.constraints['deviceId'] = deviceItem.subtitle;
-      let width = deviceItem.width.max;
-      let height = deviceItem.height.max;
-      let screenWidth = window.innerWidth;
-      this.setWidth = screenWidth
-      this.setHight = width / screenWidth * height
-      console.log(width, screenWidth, height)
-      console.log(this.setWidth, this.setHight)
-    },
-    initCameraSelection() {
-      const self = this
-      return Quagga.CameraAccess.enumerateVideoDevices()
-        .then((devices) => {
-          function pruneText(text) {
-            return text.length > 30 ? text.substr(0, 30) : text;
-          }
-          self.deviceSelections = [];
-          devices.forEach((device) => {
-            let deviceData = device.getCapabilities();
-            this.deviceSelections.push({ title: pruneText(device.label), subtitle: device.deviceId, width: deviceData.width, height: deviceData.height });
-          });
-          self.chooseCamera(this.deviceSelections[this.deviceSelections.length - 1]);
-        });
     }
   },
-  onMounted() {
+  mounted() {
     this.initCameraSelection();
   }
 };
