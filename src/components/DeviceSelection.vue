@@ -43,7 +43,7 @@
           </v-col>
           <v-col style="padding: 0px; width: 20%; flex-basis:auto;">
             <v-btn class="text-none mb-4" color="indigo-darken-3" @click="startScanning">拍条码
-              <v-overlay v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block">
+              <v-overlay class="my-overlay" v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block">
                 <!-- <v-container width="100%">
                   <v-row>
                     <v-col style="padding: 0px;">
@@ -88,7 +88,7 @@
 </template>
 
 <style>
-v-overlay {
+.my-overlay {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -97,7 +97,7 @@ v-overlay {
   height: 100%;
 }
 
-.v-overlay__content {
+.my-overlay > .v-overlay__content {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
