@@ -43,7 +43,8 @@
           </v-col>
           <v-col style="padding: 0px; width: 20%; flex-basis:auto;">
             <v-btn class="text-none mb-4" color="indigo-darken-3" @click="startScanning">拍条码
-              <v-overlay class="my-overlay" v-model="overlayUpDown" activator="parent" :eager=true scroll-strategy="block">
+              <v-overlay class="my-overlay" v-model="overlayUpDown" activator="parent" :eager=true
+                scroll-strategy="block">
                 <!-- <v-container width="100%">
                   <v-row>
                     <v-col style="padding: 0px;">
@@ -97,7 +98,7 @@
   height: 100%;
 }
 
-.my-overlay > .v-overlay__content {
+.my-overlay>.v-overlay__content {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -154,8 +155,10 @@
 
 <script>
 import { ref, watch } from 'vue';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import Quagga from 'quagga';
+import { Buffer } from 'buffer';
+import * as FileSaver from "file-saver";
 
 export default {
   watch: {
@@ -183,7 +186,7 @@ export default {
 
   setup() {
     // 扫描相关
-    let num = 0;
+    const EXCEL_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8";
     const deviceSelections = ref([]);
     const deviceSelect = ref('');
     const interactive = ref(false);
@@ -221,6 +224,7 @@ export default {
     const cabinet = ref('');
     const deviceLayer = ref('');
     const assetNumber = ref('');
+    const assetImage = ref('');
     const messageBox = ref(false);
     const messageText = ref('');
     const snackColor = ref('');
@@ -288,7 +292,8 @@ export default {
         room: room.value,
         cabinet: cabinet.value,
         deviceLayer: deviceLayer.value,
-        assetNumber: assetNumber.value || defaultAssetNumber
+        assetNumber: assetNumber.value || defaultAssetNumber,
+        assetImage: assetImage.value || '',
       };
       // 检查资产编号是否重复
       const isDuplicate = recordedData.value.some(record => record.assetNumber === newData.assetNumber);
@@ -298,15 +303,158 @@ export default {
       }
       recordedData.value.push(newData);
       messageAlert('录入成功', successAlert);
-      console.log('Recorded Data:', recordedData.value);
       // 不再清空输入框
+      assetImage.value = '';
+      imgShow.value = false;
+      saveRecordedData(); // 保存数据
     };
+
+    // 解析 dataUrl 并获取图片的长宽
+    const getImageDimensions = async (dataUrl) => {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+          resolve({ imgWidth: image.width, imgHeight: image.height });
+        };
+        image.onerror = (error) => {
+          reject(error);
+        };
+        image.src = dataUrl;
+      });
+    }
     // 导出 Excel
-    const exportExcel = () => {
-      const worksheet = XLSX.utils.json_to_sheet(recordedData.value);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
-      XLSX.writeFile(workbook, '机房设备信息.xlsx');
+    const exportExcel = async () => {
+      const data = recordedData.value
+      // 创建一个新的工作簿
+      const workbook = new ExcelJS.Workbook();
+      // 创建一个新的工作表
+      const worksheet = workbook.addWorksheet('Sheet1');
+
+      // 添加表头
+      worksheet.columns = [
+        { header: '楼栋', key: 'building', width: 10 },
+        { header: '房间', key: 'room', width: 10 },
+        { header: '机柜', key: 'cabinet', width: 10 },
+        { header: '设备所在层', key: 'deviceLayer', width: 10 },
+        { header: '资产编号', key: 'assetNumber', width: 10 },
+        { header: '资产图片', key: 'assetImage', width: 10 }
+      ];
+
+      // // 遍历数据对象，并将图片插入到Excel单元格中
+      // data.forEach(async (item, index) => {
+      // 遍历数据对象，并将图片插入到Excel单元格中
+      for (let index = 0; index < data.length; index++) {
+        const item = data[index];
+        worksheet.addRow({ building: item.building, room: item.room, cabinet: item.cabinet, deviceLayer: item.deviceLayer, assetNumber: item.assetNumber })
+        // 获取图片的dataUrl
+        const imageData = item.assetImage;
+        if (imageData && imageData.startsWith('data:image/')) {
+          let imgWidth, imgHeight = 0
+          try {
+            // 获取图片的长宽
+            await getImageDimensions(imageData).then((metadata) => {
+              imgWidth = metadata.imgWidth / 5
+              imgHeight = metadata.imgHeight / 5
+              const thisRow = worksheet.getRow(index + 2)
+              thisRow.height = imgHeight
+            });
+
+          } catch (error) {
+            console.error('Error processing images:', error);
+          }
+          // 创建image对象
+          const imageObj = workbook.addImage({
+            base64: imageData,
+            width:imgWidth,
+            height:imgHeight,
+            extension: 'png',
+          });
+          worksheet.addImage(imageObj, {
+            tl: { col: 5, row: index + 1 },
+            ext: { width: imgWidth, height: imgHeight },
+          });
+        }
+      };
+      worksheet.eachRow((row, rowNumber) => {
+        row.alignment = {
+          vertical: 'middle',
+          horizontal: 'center',
+        }
+      })
+      // 写入Excel文件到Buffer
+      workbook.xlsx.writeBuffer().then((data) => {
+
+        const blob = new Blob([data], { type: EXCEL_TYPE });
+
+        FileSaver.saveAs(blob, "机房设备信息.xlsx");
+
+      });
+
+      //   const data = recordedData.value
+      //   // 创建一个新的工作簿
+      //   const workbook = XLSX.utils.book_new();
+
+      //   // 创建一个新的工作表
+      //   const worksheet = XLSX.utils.json_to_sheet(['楼栋', '房间', '机柜', '设备所在层', '资产编号', '资产图片']);
+
+      //   // 循环数据行，将图片插入到相应的单元格中
+      //   data.forEach((item, index) => {
+      //     // 获取图片的dataUrl
+      //     const imageData = item.assetImage;
+
+      //     if (imageData && imageData.startsWith('data:image/')) {
+      //       // 解析dataUrl
+      //       const base64Image = imageData.split(',')[1];
+      //       const buffer = new Buffer(base64Image, 'base64');
+
+      //       /// 计算图片插入的位置
+      //       const rowIndex = index + 1; // 从第二行开始
+      //       const columnIndex = 5; // 第5列（Image）
+
+      //       // 确保单元格存在
+      //       const cellAddress = XLSX.utils.encode_cell({ c: columnIndex, r: rowIndex });
+
+      //       // 初始化单元格
+      //       let cell = worksheet[cellAddress];
+      //       if (!cell) {
+      //         cell = XLSX.utils.format_cell({ t: 's', v: '' });
+      //         worksheet[cellAddress] = cell;
+      //       }
+
+      //       // 创建图片对象
+      //       const image = {
+      //         image: buffer,
+      //         ext: 'png', // 图片格式
+      //         options: {
+      //           // 图片在单元格中的位置
+      //           anchor: XLSX.utils.encode_range({
+      //             s: { r: rowIndex, c: columnIndex }, // 开始行和列
+      //             e: { r: rowIndex, c: columnIndex } // 结束行和列
+      //           }),
+      //           editAs: 'oneCell', // 编辑方式
+      //         }
+      //       };
+
+      //       // 插入图片到Excel单元格
+      //       cell.M = image;
+      //     }
+      //     // 添加其他列的数据
+      //     worksheet[XLSX.utils.encode_cell({ c: 0, r: index + 1 })] = { v: item.building };
+      //     worksheet[XLSX.utils.encode_cell({ c: 1, r: index + 1 })] = { v: item.room };
+      //     worksheet[XLSX.utils.encode_cell({ c: 2, r: index + 1 })] = { v: item.cabinet };
+      //     worksheet[XLSX.utils.encode_cell({ c: 3, r: index + 1 })] = { v: item.deviceLayer };
+      //     worksheet[XLSX.utils.encode_cell({ c: 4, r: index + 1 })] = { v: item.assetNumber };
+      //   })
+      //   // 添加工作表到工作簿
+      //   XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+      //   // 写入Excel文件
+      //   XLSX.writeFile(workbook, '机房设备信息.xlsx');
+
+      //   // const worksheet = XLSX.utils.json_to_sheet(recordedData.value);
+      //   // const workbook = XLSX.utils.book_new();
+      //   // XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+      //   // XLSX.writeFile(workbook, '机房设备信息.xlsx');
+      saveRecordedData(); // 保存数据
     };
 
     const delay = (ms) => {
@@ -375,6 +523,7 @@ export default {
           let canvas = Quagga.canvas.dom.image;
           imgSrc.value = canvas.toDataURL();
           imgShow.value = true;
+          assetImage.value = imgSrc.value
           // 关闭视频
           Quagga.stop();
         }
@@ -402,6 +551,17 @@ export default {
           }
         }
       });
+    };
+    // 加载 localStorage 中的数据
+    const loadRecordedData = () => {
+      const savedData = localStorage.getItem('recordedData');
+      if (savedData) {
+        recordedData.value = JSON.parse(savedData);
+      }
+    };
+    // 保存数据到 localStorage
+    const saveRecordedData = () => {
+      localStorage.setItem('recordedData', JSON.stringify(recordedData.value));
     };
     return {
       building,
@@ -432,6 +592,7 @@ export default {
       messageAlert,
       tipAlert,
       initCameraSelection,
+      loadRecordedData,
     };
   },
   methods: {
@@ -444,6 +605,7 @@ export default {
   },
   mounted() {
     this.initCameraSelection();
+    this.loadRecordedData();
   }
 };
 

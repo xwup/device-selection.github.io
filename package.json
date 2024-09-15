@@ -9,20 +9,22 @@
   },
   "dependencies": {
     "@mdi/font": "7.4.47",
+    "buffer": "^6.0.3",
     "core-js": "^3.37.1",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
+    "quagga": "^0.12.1",
     "roboto-fontface": "*",
     "vue": "^3.4.31",
     "vue-router": "^4.4.0",
-    "vuetify": "^3.6.11",
-    "quagga": "^0.12.1",
-    "xlsx": "^0.18.5"
-    
+    "vuetify": "^3.6.11"
   },
   "devDependencies": {
     "@babel/types": "^7.24.7",
     "@types/node": "^20.14.10",
     "@vitejs/plugin-vue": "^5.0.5",
     "@vue/eslint-config-typescript": "^13.0.0",
+    "buffer": "^6.0.3",
     "eslint": "^8.57.0",
     "eslint-config-standard": "^17.1.0",
     "eslint-plugin-import": "^2.29.1",
@@ -30,6 +32,8 @@
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^6.4.0",
     "eslint-plugin-vue": "^9.27.0",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
     "quagga": "^0.12.1",
     "sass": "1.77.6",
     "typescript": "^5.4.2",

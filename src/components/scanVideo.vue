@@ -42,7 +42,7 @@ export default {
 
     },
 
-    destroyed() {
+    unmounted() {
         this.codeReader.stopContinuousDecode();
         this.codeReader.reset();
     },
